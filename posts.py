@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from sqlalchemy import Table, Column, Integer, String, MetaData
+# posts.py
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends
+from sqlalchemy import Table, select, MetaData, Integer, String, Column
 from databases import Database
 from dotenv import load_dotenv
 import os
@@ -7,6 +8,7 @@ import boto3
 from botocore.exceptions import NoCredentialsError
 import logging
 from typing import List
+from users import get_current_user  # Import the get_current_user dependency
 
 load_dotenv()
 
@@ -63,11 +65,14 @@ async def create_post(
     top_price: int = Form(...),
     creator_id: int = Form(...),
     images: List[UploadFile] = File(...),
+    current_user: dict = Depends(get_current_user),  # Use get_current_user directly in the route function
 ):
     # Process each uploaded image
     for image in images:
-        contents = await image.read()  # Ensure that the fileobj implements read
-        # Your logic to handle the file contents, such as uploading to S3
+        contents = await image.read()  # Your logic to handle the file contents, such as uploading to S3
+
+    # Use current_user as needed in your logic
+    creator_id_from_token = current_user["sub"]
 
     # Your existing logic for creating a post
     post = {
@@ -81,3 +86,9 @@ async def create_post(
     post_id = await database.execute(query)
 
     return {"message": "Post created"}
+
+@router.get("/list_posts/", response_model=list[dict])
+async def list_posts(skip: int = 0, limit: int = 10):
+    query = select(posts).offset(skip).limit(limit)
+    posts_list = await database.fetch_all(query)
+    return [dict(post) for post in posts_list]

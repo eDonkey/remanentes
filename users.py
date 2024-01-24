@@ -1,6 +1,8 @@
 # users.py
 import os
-from fastapi import APIRouter, HTTPException, Request, Form, Depends
+import jwt
+from jwt import ExpiredSignatureError
+from fastapi import APIRouter, HTTPException, Request, Form, Depends, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -11,6 +13,8 @@ from passlib.context import CryptContext
 from dotenv import load_dotenv
 
 load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 router = APIRouter()
 
@@ -88,3 +92,32 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     token_data = {"sub": user["email"]}
     access_token = create_jwt_token(token_data)
     return {"access_token": access_token, "token_type": "bearer"}
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+def verify_token(token: str):
+    try:
+        # Decode the token using the secret key
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        # Return the decoded payload
+        return payload
+    except jwt.ExpiredSignatureError:
+        # Token has expired
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        # Invalid token
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        user = verify_token(token)
+        return user
+    except HTTPException as e:
+        # Catch the HTTPException raised by verify_token and return it
+        raise e
+
+# def get_current_user(token: str = Depends(oauth2_scheme)):
+#     user = verify_token(token)
+#     if user is None:
+#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+#     return user
