@@ -1,15 +1,29 @@
-# posts.py
-from fastapi import APIRouter, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from sqlalchemy import Table, Column, Integer, String, MetaData
 from databases import Database
 from dotenv import load_dotenv
 import os
+import boto3
+from botocore.exceptions import NoCredentialsError
+import logging
+from typing import List
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("PGSERVER")
 database = Database(DATABASE_URL)
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
+
+if not (AWS_ACCESS_KEY and AWS_SECRET_KEY and AWS_BUCKET_NAME):
+    raise ValueError("AWS credentials or bucket name not provided.")
+
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY
+)
 
 metadata = MetaData()
 
@@ -27,65 +41,43 @@ posts = Table(
 
 router = APIRouter()
 
-
 @router.on_event("startup")
 async def startup_db_client():
-    await database.connect()
-
+    try:
+        await database.connect()
+        logging.info("Connected to the database")
+    except Exception as e:
+        logging.error(f"Error connecting to the database: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.on_event("shutdown")
 async def shutdown_db_client():
     await database.disconnect()
 
-
-@router.post("/posts/", response_class=HTMLResponse)
+@router.post("/posts/")
 async def create_post(
     request: Request,
     title: str = Form(...),
     description: str = Form(...),
-    image: str = Form(...),
     current_price: int = Form(...),
     top_price: int = Form(...),
     creator_id: int = Form(...),
+    images: List[UploadFile] = File(...),
 ):
+    # Process each uploaded image
+    for image in images:
+        contents = await image.read()  # Ensure that the fileobj implements read
+        # Your logic to handle the file contents, such as uploading to S3
+
+    # Your existing logic for creating a post
     post = {
         "title": title,
         "description": description,
-        "image": image,
         "current_price": current_price,
         "top_price": top_price,
         "creator_id": creator_id,
     }
     query = posts.insert().values(post)
     post_id = await database.execute(query)
+
     return {"message": "Post created"}
-
-
-@router.get("/posts/{post_id}", response_model=dict)
-async def read_post(post_id: int):
-    query = posts.select().where(posts.c.id == post_id)
-    post = await database.fetch_one(query)
-    if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return dict(post)
-
-
-@router.get("/posts/", response_model=list[dict])
-async def read_posts(skip: int = 0, limit: int = 10):
-    query = posts.select().offset(skip).limit(limit)
-    posts_list = await database.fetch_all(query)
-    return [dict(post) for post in posts_list]
-
-
-@router.put("/posts/{post_id}", response_model=dict)
-async def update_post(post_id: int, post: dict):
-    query = posts.update().where(posts.c.id == post_id).values(post)
-    await database.execute(query)
-    return {"id": post_id, **post}
-
-
-@router.delete("/posts/{post_id}", response_model=dict)
-async def delete_post(post_id: int):
-    query = posts.delete().where(posts.c.id == post_id)
-    await database.execute(query)
-    return {"message": "Post deleted"}

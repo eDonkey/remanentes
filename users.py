@@ -1,14 +1,23 @@
-# user.py
-from fastapi import APIRouter, HTTPException, Request, Form
-from sqlalchemy import Table, Column, Integer, String, MetaData
-from databases import Database
+# users.py
+import os
+from fastapi import APIRouter, HTTPException, Request, Form, Depends
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
+from sqlalchemy import Table, Column, Integer, String, MetaData, select
+from databases import Database
 from passlib.context import CryptContext
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter()
 
 metadata = MetaData()
+
+DATABASE_URL = os.getenv('PGSERVER')
+database = Database(DATABASE_URL)
 
 users = Table(
     "users",
@@ -22,6 +31,19 @@ users = Table(
 # Password hashing configuration
 password_hashing = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+async def startup_db_client():
+    await database.connect()
+
+async def shutdown_db_client():
+    await database.disconnect()
+
+async def authenticate_user(email: str, password: str):
+    query = select([users.c.email, users.c.password]).where(users.c.email == email)
+    user = await database.fetch_one(query)
+    if user and password_hashing.verify(password, user['password']):
+        return user
+    return None
+
 @router.post("/users/")
 async def create_user(request: Request, name: str = Form(...), email: str = Form(...), password: str = Form(...)):
     # Hash the password before storing it
@@ -31,7 +53,6 @@ async def create_user(request: Request, name: str = Form(...), email: str = Form
     user_id = await database.execute(query)
     return {"message": "User created", "user_id": user_id}
 
-
 @router.get("/users/{user_id}", response_model=dict)
 async def read_user(user_id: int):
     query = users.select().where(users.c.id == user_id)
@@ -40,13 +61,11 @@ async def read_user(user_id: int):
         raise HTTPException(status_code=404, detail="User not found")
     return dict(user)
 
-
 @router.get("/users/", response_model=list[dict])
 async def read_users(skip: int = 0, limit: int = 10):
     query = users.select().offset(skip).limit(limit)
     users_list = await database.fetch_all(query)
     return [dict(user) for user in users_list]
-
 
 @router.put("/users/{user_id}", response_model=dict)
 async def update_user(user_id: int, user: dict):
@@ -54,9 +73,18 @@ async def update_user(user_id: int, user: dict):
     await database.execute(query)
     return {"id": user_id, **user}
 
-
 @router.delete("/users/{user_id}", response_model=dict)
 async def delete_user(user_id: int):
     query = users.delete().where(users.c.id == user_id)
     await database.execute(query)
     return {"message": "User deleted"}
+
+@router.post("/token")
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await authenticate_user(form_data.username, form_data.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token_data = {"sub": user["email"]}
+    access_token = create_jwt_token(token_data)
+    return {"access_token": access_token, "token_type": "bearer"}
