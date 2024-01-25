@@ -1,0 +1,26 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: SSH into DigitalOcean Droplet and update the code
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_SSH_USERNAME }}
+          password: ${{ secrets.DROPLET_SSH_PASSWORD }}
+          port: 22  # Change the port if your Droplet is configured on a different SSH port
+          script: |
+            cd /root/project/remanentes
+            git pull origin main
+            # Add any additional deployment steps you need here
