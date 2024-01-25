@@ -22,5 +22,5 @@ jobs:
           port: 22  # Change the port if your Droplet is configured on a different SSH port
           script: |
             cd /root/project/remanentes
-            git pull origin main
+            git pull
             # Add any additional deployment steps you need here
