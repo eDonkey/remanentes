@@ -13,7 +13,9 @@ from users import get_current_user  # Import the get_current_user dependency
 load_dotenv()
 
 DATABASE_URL = os.getenv("PGSERVER")
-database = Database(DATABASE_URL)
+#database = Database(DATABASE_URL)
+database = Database(DATABASE_URL, min_size=1, max_size=20)
+
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")

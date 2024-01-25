@@ -1,6 +1,7 @@
 # users.py
 import os
 import jwt
+from jwt.exceptions import ExpiredSignatureError
 from jwt import ExpiredSignatureError
 from fastapi import APIRouter, HTTPException, Request, Form, Depends, status
 from fastapi.responses import JSONResponse
@@ -21,7 +22,8 @@ router = APIRouter()
 metadata = MetaData()
 
 DATABASE_URL = os.getenv('PGSERVER')
-database = Database(DATABASE_URL)
+#database = Database(DATABASE_URL)
+database = Database(DATABASE_URL, min_size=1, max_size=20)
 
 users = Table(
     "users",

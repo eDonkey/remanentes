@@ -35,7 +35,9 @@ if ENABLE_USERS_MODULE:
 app = FastAPI()
 
 DATABASE_URL = os.getenv('PGSERVER')
-database = Database(DATABASE_URL)
+#database = Database(DATABASE_URL)
+database = Database(DATABASE_URL, min_size=1, max_size=20)
+
 
 app.add_middleware(
     CORSMiddleware,
