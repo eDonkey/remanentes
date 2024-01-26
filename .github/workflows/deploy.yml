@@ -23,4 +23,4 @@ jobs:
           script: |
             cd /root/project/remanentes
             git pull
-            # Add any additional deployment steps you need here
+            systemctl restart remanentesapi.service

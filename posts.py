@@ -61,7 +61,7 @@ async def shutdown_db_client():
 
 import os
 
-@router.post("/posts/")
+@router.post("/create")
 async def create_post(
     request: Request,
     title: str = Form(...),
@@ -127,7 +127,7 @@ async def create_post(
 
     return {"message": "Post created"}
 
-@router.get("/posts/", response_model=List[dict])
+@router.get("/list", response_model=List[dict])
 async def list_posts(skip: int = 0, limit: int = 10):
     query = select(posts).offset(skip).limit(limit)
     posts_list = await database.fetch_all(query)
