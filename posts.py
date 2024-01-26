@@ -1,5 +1,5 @@
 # posts.py
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends, Path
 from sqlalchemy import Table, select, MetaData, Integer, String, Column
 from databases import Database
 from dotenv import load_dotenv
@@ -132,3 +132,13 @@ async def list_posts(skip: int = 0, limit: int = 10):
     query = select(posts).offset(skip).limit(limit)
     posts_list = await database.fetch_all(query)
     return [dict(post) for post in posts_list]
+
+@router.get("/details/{post_id}", response_model=dict)
+async def get_post_details(post_id: int = Path(..., title="The ID of the post to retrieve")):
+    query = select(posts).where(posts.c.id == post_id)
+    post_details = await database.fetch_one(query)
+
+    if post_details is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    return dict(post_details)
