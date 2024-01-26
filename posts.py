@@ -13,7 +13,6 @@ from users import get_current_user  # Import the get_current_user dependency
 load_dotenv()
 
 DATABASE_URL = os.getenv("PGSERVER")
-#database = Database(DATABASE_URL)
 database = Database(DATABASE_URL, min_size=1, max_size=20)
 
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
@@ -29,10 +28,7 @@ s3 = boto3.client(
     endpoint_url='https://stg-remanentes.sfo3.digitaloceanspaces.com',
     aws_access_key_id=os.getenv('SPACES_KEY'),
     aws_secret_access_key=os.getenv('SPACES_SECRET')
-    # aws_access_key_id=AWS_ACCESS_KEY,
-    # aws_secret_access_key=AWS_SECRET_KEY
 )
-
 
 metadata = MetaData()
 
@@ -130,3 +126,9 @@ async def create_post(
     await database.execute(update_query)
 
     return {"message": "Post created"}
+
+@router.get("/posts/", response_model=List[dict])
+async def list_posts(skip: int = 0, limit: int = 10):
+    query = select(posts).offset(skip).limit(limit)
+    posts_list = await database.fetch_all(query)
+    return [dict(post) for post in posts_list]
