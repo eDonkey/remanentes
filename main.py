@@ -96,6 +96,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
     return user
 
+@app.get("/version", response_model=dict)
+async def read_build_version():
+    try:
+        with open("Build.Version", "r") as file:
+            version_line = file.readline().strip()
+            return {"version": version_line}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Build.Version file not found")
+
 @app.on_event("startup")
 async def startup_db_client():
     await user_startup()
