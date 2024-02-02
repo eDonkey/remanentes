@@ -18,7 +18,17 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 DATABASE_URL = os.getenv('PGSERVER')
 
-app = FastAPI()
+def bversion():
+    try:
+        with open("Build.Version", "r") as file:
+            version_line = file.readline().strip()
+            return version_line
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Build.Version file not found")
+
+versionn = bversion()
+
+app = FastAPI(version=versionn)
 
 if ENABLE_POSTS_MODULE:
     from posts import (
