@@ -20,6 +20,16 @@ router = APIRouter()
 metadata = MetaData()
 database = Database(DATABASE_URL, min_size=1, max_size=20)
 
+def bversion():
+    try:
+        with open("Build.Version", "r") as file:
+            version_line = file.readline().strip()
+            return version_line
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Build.Version file not found")
+
+versionn = bversion()
+
 users = Table(
     "users",
     metadata,
@@ -27,6 +37,7 @@ users = Table(
     Column("name", String, index=True),
     Column("email", String, unique=True, index=True),
     Column("password", String),
+    Column("created_on_version", String),
 )
 
 password_hashing = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -45,7 +56,7 @@ async def authenticate_user(email: str, password: str):
 @router.post("/users/")
 async def create_user(request: Request, name: str = Form(...), email: str = Form(...), password: str = Form(...)):
     hashed_password = password_hashing.hash(password)
-    user = {"name": name, "email": email, "password": hashed_password}
+    user = {"name": name, "email": email, "password": hashed_password, "created_on_version": versionn}
     query = users.insert().values(user)
     user_id = await database.execute(query)
     return {"message": "User created", "user_id": user_id}
