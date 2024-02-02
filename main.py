@@ -14,15 +14,24 @@ from posts import (
     startup_db_client as posts_startup,
     shutdown_db_client as posts_shutdown
 )
+from bids import (
+    router as bids_router,
+    startup_db_client as bids_startup,
+    shutdown_db_client as bids_shutdown
+)
+
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
+
 load_dotenv()
 
 ENABLE_POSTS_MODULE = os.getenv("ENABLE_POSTS_MODULE", "False").lower() == "true"
 ENABLE_USERS_MODULE = os.getenv("ENABLE_USERS_MODULE", "False").lower() == "true"
+ENABLE_BIDS_MODULE = os.getenv("ENABLE_BIDS_MODULE", "False").lower() == "true"
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 
@@ -31,6 +40,9 @@ if ENABLE_POSTS_MODULE:
 
 if ENABLE_USERS_MODULE:
     from users import router as users_router
+
+if ENABLE_BIDS_MODULE:  # Assuming you have a variable ENABLE_BIDS_MODULE set to True
+    from bids import router as bids_router
 
 app = FastAPI()
 
@@ -109,13 +121,18 @@ async def read_build_version():
 async def startup_db_client():
     await user_startup()
     await posts_startup()
+    print("Before bids_startup")
+    await bids_startup()
+    print("After bids_startup")
     await database.connect()
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    await bids_shutdown
     await user_shutdown()
     await posts_shutdown()
     await database.disconnect()
 
 app.include_router(posts_router, prefix="/posts", tags=["posts"])
 app.include_router(users_router, prefix="/users", tags=["users"])  # Include the user router
+app.include_router(bids_router, prefix="/bids", tags=["bids"])

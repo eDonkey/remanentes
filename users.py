@@ -110,13 +110,107 @@ def verify_token(token: str):
         # Invalid token
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"}
+    )
     try:
-        user = verify_token(token)
-        return user
-    except HTTPException as e:
-        # Catch the HTTPException raised by verify_token and return it
-        raise e
+        payload = verify_token(token)
+        user_email: str = payload.get("sub")
+        if user_email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    # Fetch the user from the database based on the user_email
+    try:
+        query = users.select().where(users.c.email == user_email)
+        user = await database.fetch_one(query)
+        if user is None:
+            raise credentials_exception
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")
+
+    return user
+
+
+# async def get_current_user(token: str = Depends(oauth2_scheme)):
+#     credentials_exception = HTTPException(
+#         status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"}
+#     )
+#     try:
+#         payload = verify_token(token)
+#         user_id: int = payload.get("sub")
+#         if user_id is None:
+#             raise credentials_exception
+#     except JWTError:
+#         raise credentials_exception
+
+# # Fetch the user from the database based on the user_id
+#     try:
+#         query = users.select().where(users.c.id == user_id)
+#         user = await database.fetch_one(query)
+#         if user is None:
+#             raise credentials_exception
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")
+
+    # try:
+    #     payload = verify_token(token)
+    #     user_id: int = payload.get("sub")
+    #     if user_id is None:
+    #         raise credentials_exception
+    # except JWTError:
+    #     # Log or handle the specific exception related to JWT verification
+    #     raise credentials_exception
+
+    # # Fetch the user from the database based on the user_id
+    # try:
+    #     query = users.select().where(users.c.id == user_id)
+    #     user = await database.fetch_one(query)
+    #     if user is None:
+    #         raise credentials_exception
+    # except Exception as e:
+    #     # Log or handle the specific exception related to database fetch
+    #     raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")
+
+    # return user
+
+
+
+# async def get_current_user(token: str = Depends(oauth2_scheme)):
+#     credentials_exception = HTTPException(
+#         status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"}
+#     )
+#     try:
+#         payload = verify_token(token)
+#         user_id: int = payload.get("sub")
+#         if user_id is None:
+#             raise credentials_exception
+#     except HTTPException:
+#         raise credentials_exception
+
+#     # Fetch the user from the database based on the user_id
+#     query = users.select().where(users.c.id == user_id)
+#     user = await database.fetch_one(query)
+#     if user is None:
+#         raise credentials_exception
+
+#     return user
+
+
+
+
+
+# def get_current_user(token: str = Depends(oauth2_scheme)):
+#     try:
+#         user = verify_token(token)
+#         return user
+#     except HTTPException as e:
+#         # Catch the HTTPException raised by verify_token and return it
+#         raise e
 
 # def get_current_user(token: str = Depends(oauth2_scheme)):
 #     user = verify_token(token)
