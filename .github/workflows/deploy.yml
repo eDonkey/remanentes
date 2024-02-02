@@ -23,5 +23,5 @@ jobs:
           script: |
             cd /root/project/remanentes
             git pull
-            systemctl restart remanentesapi.service
             bash /root/project/scripts/versioning.sh
+            systemctl restart remanentesapi.service
