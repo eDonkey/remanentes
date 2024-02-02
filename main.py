@@ -50,10 +50,13 @@ DATABASE_URL = os.getenv('PGSERVER')
 #database = Database(DATABASE_URL)
 database = Database(DATABASE_URL, min_size=1, max_size=20)
 
+origins = [
+    "http://pegaso.us",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
