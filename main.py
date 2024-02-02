@@ -3,27 +3,12 @@ import os
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from databases import Database
-from users import (
-    router as users_router,
-    startup_db_client as user_startup,
-    shutdown_db_client as user_shutdown,
-    authenticate_user as authenticate_user
-)
-from posts import (
-    router as posts_router,
-    startup_db_client as posts_startup,
-    shutdown_db_client as posts_shutdown
-)
-from bids import (
-    router as bids_router,
-    startup_db_client as bids_startup,
-    shutdown_db_client as bids_shutdown
-)
-
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from datetime import datetime, timedelta
+
 
 
 load_dotenv()
@@ -32,20 +17,33 @@ ENABLE_POSTS_MODULE = os.getenv("ENABLE_POSTS_MODULE", "False").lower() == "true
 ENABLE_USERS_MODULE = os.getenv("ENABLE_USERS_MODULE", "False").lower() == "true"
 ENABLE_BIDS_MODULE = os.getenv("ENABLE_BIDS_MODULE", "False").lower() == "true"
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
-
-if ENABLE_POSTS_MODULE:
-    from posts import router as posts_router
-
-if ENABLE_USERS_MODULE:
-    from users import router as users_router
-
-if ENABLE_BIDS_MODULE:  # Assuming you have a variable ENABLE_BIDS_MODULE set to True
-    from bids import router as bids_router
-
 app = FastAPI()
 
+if ENABLE_POSTS_MODULE:
+    from posts import (
+        router as posts_router,
+        startup_db_client as posts_startup,
+        shutdown_db_client as posts_shutdown
+    )
+    app.include_router(posts_router, prefix="/posts", tags=["posts"])
+if ENABLE_USERS_MODULE:
+    from users import (
+        router as users_router,
+        startup_db_client as user_startup,
+        shutdown_db_client as user_shutdown,
+        authenticate_user as authenticate_user
+    )
+    app.include_router(users_router, prefix="/users", tags=["users"])  # Include the user router
+if ENABLE_BIDS_MODULE:  # Assuming you have a variable ENABLE_BIDS_MODULE set to True
+    from bids import (
+       router as bids_router,
+        startup_db_client as bids_startup,
+        shutdown_db_client as bids_shutdown
+    )
+    app.include_router(bids_router, prefix="/bids", tags=["bids"])
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 DATABASE_URL = os.getenv('PGSERVER')
 #database = Database(DATABASE_URL)
 database = Database(DATABASE_URL, min_size=1, max_size=20)
@@ -86,10 +84,23 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    #token_data = {"sub": user["email"]}
-    token_data = {"sub": (await user)["email"]}
+    # Set the expiration time for the token (e.g., 3 days)
+    expires_in = timedelta(days=3)
+
+    # Calculate the expiration datetime
+    expiration_datetime = datetime.utcnow() + expires_in
+
+    # token_data includes the subject and expiration time
+    token_data = {
+        "sub": (await user)["email"],
+        "exp": expiration_datetime,
+    }
+
+    # Create a JWT token
     access_token = create_jwt_token(token_data)
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    # Return the response with the access token and expires_in
+    return {"access_token": access_token, "token_type": "bearer", "expires_in": expires_in.total_seconds()}
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -122,20 +133,21 @@ async def read_build_version():
 
 @app.on_event("startup")
 async def startup_db_client():
-    await user_startup()
-    await posts_startup()
-    print("Before bids_startup")
-    await bids_startup()
-    print("After bids_startup")
+    if ENABLE_USERS_MODULE:
+        await user_startup()
+    if ENABLE_POSTS_MODULE:
+        await posts_startup()
+    if ENABLE_BIDS_MODULE:
+        await bids_startup()
     await database.connect()
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    await bids_shutdown
-    await user_shutdown()
-    await posts_shutdown()
+    if ENABLE_BIDS_MODULE:
+        await bids_shutdown
+    if ENABLE_USERS_MODULE:
+        await user_shutdown()
+    if ENABLE_POSTS_MODULE:
+        await posts_shutdown()
     await database.disconnect()
 
-app.include_router(posts_router, prefix="/posts", tags=["posts"])
-app.include_router(users_router, prefix="/users", tags=["users"])  # Include the user router
-app.include_router(bids_router, prefix="/bids", tags=["bids"])
