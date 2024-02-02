@@ -9,13 +9,14 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 
-
-
 load_dotenv()
 
 ENABLE_POSTS_MODULE = os.getenv("ENABLE_POSTS_MODULE", "False").lower() == "true"
 ENABLE_USERS_MODULE = os.getenv("ENABLE_USERS_MODULE", "False").lower() == "true"
 ENABLE_BIDS_MODULE = os.getenv("ENABLE_BIDS_MODULE", "False").lower() == "true"
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+DATABASE_URL = os.getenv('PGSERVER')
 
 app = FastAPI()
 
@@ -33,8 +34,8 @@ if ENABLE_USERS_MODULE:
         shutdown_db_client as user_shutdown,
         authenticate_user as authenticate_user
     )
-    app.include_router(users_router, prefix="/users", tags=["users"])  # Include the user router
-if ENABLE_BIDS_MODULE:  # Assuming you have a variable ENABLE_BIDS_MODULE set to True
+    app.include_router(users_router, prefix="/users", tags=["users"]) 
+if ENABLE_BIDS_MODULE: 
     from bids import (
        router as bids_router,
         startup_db_client as bids_startup,
@@ -42,10 +43,6 @@ if ENABLE_BIDS_MODULE:  # Assuming you have a variable ENABLE_BIDS_MODULE set to
     )
     app.include_router(bids_router, prefix="/bids", tags=["bids"])
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
-DATABASE_URL = os.getenv('PGSERVER')
-#database = Database(DATABASE_URL)
 database = Database(DATABASE_URL, min_size=1, max_size=20)
 
 origins = [
@@ -59,11 +56,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Password hashing configuration
 password_hashing = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# OAuth2PasswordBearer is a class for creating a dependency to get the token from the request headers
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def create_jwt_token(data: dict) -> str:
@@ -84,22 +77,15 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Set the expiration time for the token (e.g., 3 days)
     expires_in = timedelta(days=3)
 
-    # Calculate the expiration datetime
     expiration_datetime = datetime.utcnow() + expires_in
 
-    # token_data includes the subject and expiration time
     token_data = {
         "sub": (await user)["email"],
         "exp": expiration_datetime,
     }
-
-    # Create a JWT token
     access_token = create_jwt_token(token_data)
-
-    # Return the response with the access token and expires_in
     return {"access_token": access_token, "token_type": "bearer", "expires_in": expires_in.total_seconds()}
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -114,7 +100,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
 
-    # Fetch the user from the database based on the email
     query = users.select().where(users.c.email == email)
     user = await database.fetch_one(query)
     if user is None:
@@ -150,4 +135,3 @@ async def shutdown_db_client():
     if ENABLE_POSTS_MODULE:
         await posts_shutdown()
     await database.disconnect()
-
