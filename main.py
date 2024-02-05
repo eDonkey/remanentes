@@ -83,7 +83,7 @@ def verify_jwt_token(token: str) -> dict:
 
 @app.post("/token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form_data.username, form_data.password)
+    user = await authenticate_user(form_data.username, form_data.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -92,7 +92,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     expiration_datetime = datetime.utcnow() + expires_in
 
     token_data = {
-        "sub": (await user)["email"],
+        "sub": user["email"],
         "exp": expiration_datetime,
     }
     access_token = create_jwt_token(token_data)

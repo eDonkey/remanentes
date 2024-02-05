@@ -2,14 +2,17 @@ import os
 import jwt
 from jwt.exceptions import ExpiredSignatureError
 from jwt import ExpiredSignatureError
-from fastapi import APIRouter, HTTPException, Request, Form, Depends, status
+from fastapi import APIRouter, HTTPException, Request, Form, Depends, status, Body
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import Table, Column, Integer, String, MetaData, select
+from sqlalchemy import Table, Column, Integer, String, MetaData, select, Boolean
 from databases import Database
 from passlib.context import CryptContext
 from dotenv import load_dotenv
+from uuid import uuid4
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 load_dotenv()
 
@@ -27,8 +30,39 @@ def bversion():
             return version_line
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Build.Version file not found")
-
 versionn = bversion()
+
+def sendtemplate(to, name, token, mailtemplate):
+    message = Mail(
+        from_email=("awdoviak@gmail.com", "Pegaso US"),
+        to_emails=to,
+        is_multiple=True)
+
+    message.dynamic_template_data = {
+     "nombre":name,
+     "email":to,
+     "token":token
+    }
+
+    message.template_id = mailtemplate
+
+    try:
+        sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+        sendgrid_client.send(message)
+    except Exception as e:
+        print(e)
+
+users_personal_information = Table(
+    "users_personal_information",
+    metadata,
+    Column("user_id", Integer, primary_key=True, index=True),
+    Column("address", String),
+    Column("zipcode", Integer),
+    Column("state", String),
+    Column("country", String, default='Argentina'),
+    Column("phone", Integer),
+)
+
 
 users = Table(
     "users",
@@ -38,6 +72,9 @@ users = Table(
     Column("email", String, unique=True, index=True),
     Column("password", String),
     Column("created_on_version", String),
+    Column("token", String),
+    Column("verified", Boolean, default=False),  # New column for user verification
+
 )
 
 password_hashing = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -56,9 +93,11 @@ async def authenticate_user(email: str, password: str):
 @router.post("/users/")
 async def create_user(request: Request, name: str = Form(...), email: str = Form(...), password: str = Form(...)):
     hashed_password = password_hashing.hash(password)
-    user = {"name": name, "email": email, "password": hashed_password, "created_on_version": versionn}
+    rand_token = uuid4()
+    user = {"name": name, "email": email, "password": hashed_password, "created_on_version": versionn, "token": str(rand_token)}
     query = users.insert().values(user)
     user_id = await database.execute(query)
+    sendtemplate(email, name, str(rand_token), "d-674c00c508b04698b29366e7aa291ad7")
     return {"message": "User created", "user_id": user_id}
 @router.get("/users/{user_id}", response_model=dict)
 async def read_user(user_id: int):
@@ -87,9 +126,29 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     user = await authenticate_user(form_data.username, form_data.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token_data = {"sub": user["email"]}
+    token_data = {"sub": user["email"], "id": user["id"], "verified": user["verified"]}
     access_token = create_jwt_token(token_data)
     return {"access_token": access_token, "token_type": "bearer"}
+@router.get("/verify")
+async def verify_user(token: str):
+    try:
+        # payload = verify_token(token)
+        # user_email: str = payload.get("sub")
+        # print(user_email)
+        # if user_email is None:
+        #     raise HTTPException(status_code=400, detail="Invalid token format")
+
+        # Update the user in the database, marking them as verified
+        query = users.update().where(users.c.token == token).values(verified=True)
+        await database.execute(query)
+        return {"message": "User successfully verified"}
+    except HTTPException as e:
+        # Re-raise the HTTPException if it's already an HTTPException
+        raise e
+    except Exception as e:
+        # Handle other exceptions and return an internal server error
+        raise HTTPException(status_code=500, detail=f"Error verifying user: {str(e)}")
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -120,3 +179,37 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching user: {str(e)}")
     return user
+
+@router.post("/users/personal-information")
+async def fill_personal_information(
+    user: dict = Depends(get_current_user),
+    address: str = Form(...),
+    zipcode: int = Form(...),
+    state: str = Form(...),
+    country: str = Form("Argentina"),  # Default value set to 'Argentina'
+    phone: int = Form(...)
+):
+    # Check if the user is verified
+    print("User object:", user)  # Add this line to print the user object
+    print("User id:", user["id"])  # Add this line to print the user object
+    print("User verified:", user["verified"])  # Add this line to print the user object
+
+
+    if user["verified"] is None:
+        raise HTTPException(status_code=403, detail="User is not verified. Please verify your account.")
+
+    # Prepare the data for insertion
+    personal_info = {
+        "user_id": user["id"],
+        "address": address,
+        "zipcode": zipcode,
+        "state": state,
+        "country": country,
+        "phone": phone,
+    }
+
+    # Insert data into users_personal_information table
+    query = users_personal_information.insert().values(personal_info)
+    user_personal_info_id = await database.execute(query)
+
+    return {"message": "User personal information added successfully"}
