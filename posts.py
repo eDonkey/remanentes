@@ -1,5 +1,5 @@
 # posts.py
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends, Path
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends, Path, Query
 from sqlalchemy import Table, select, MetaData, Integer, String, Column
 from databases import Database
 from dotenv import load_dotenv
@@ -117,3 +117,21 @@ async def get_post_details(post_id: int = Path(..., title="The ID of the post to
         raise HTTPException(status_code=404, detail="Post not found")
 
     return dict(post_details)
+@router.get("/search", response_model=List[dict])
+async def search_posts(
+    query_string: str = Query(..., title="Search query"),
+    skip: int = Query(0, title="Number of items to skip"),
+    limit: int = Query(10, title="Number of items to retrieve")
+):
+    # Use ILIKE to perform case-insensitive search in PostgreSQL
+    search_query = f"%{query_string}%"
+
+    search_condition = (
+        (posts.c.title.ilike(search_query)) | 
+        (posts.c.description.ilike(search_query))
+    )
+
+    query = select(posts).where(search_condition).offset(skip).limit(limit)
+    search_results = await database.fetch_all(query)
+
+    return [dict(post) for post in search_results]
