@@ -108,7 +108,10 @@ async def create_post(
 async def list_posts(skip: int = 0, limit: int = 10):
     query = select(posts).offset(skip).limit(limit)
     posts_list = await database.fetch_all(query)
+    if not posts_list:
+        return {"message": "No hay subastas activas en este momento."}
     return [dict(post) for post in posts_list]
+
 @router.get("/details/{post_id}", response_model=dict)
 async def get_post_details(post_id: int = Path(..., title="The ID of the post to retrieve")):
     query = select(posts).where(posts.c.id == post_id)
