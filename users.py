@@ -3,7 +3,7 @@ import jwt
 from jwt.exceptions import ExpiredSignatureError
 from jwt import ExpiredSignatureError
 from fastapi import APIRouter, HTTPException, Request, Form, Depends, status, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import Table, Column, Integer, String, MetaData, select, Boolean
@@ -37,15 +37,12 @@ def sendtemplate(to, name, token, mailtemplate):
         from_email=("awdoviak@gmail.com", "Pegaso US"),
         to_emails=to,
         is_multiple=True)
-
     message.dynamic_template_data = {
      "nombre":name,
      "email":to,
      "token":token
     }
-
     message.template_id = mailtemplate
-
     try:
         sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         sendgrid_client.send(message)
@@ -62,8 +59,6 @@ users_personal_information = Table(
     Column("country", String, default='Argentina'),
     Column("phone", Integer),
 )
-
-
 users = Table(
     "users",
     metadata,
