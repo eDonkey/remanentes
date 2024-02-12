@@ -132,21 +132,13 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @router.get("/verify")
 async def verify_user(token: str):
     try:
-        # payload = verify_token(token)
-        # user_email: str = payload.get("sub")
-        # print(user_email)
-        # if user_email is None:
-        #     raise HTTPException(status_code=400, detail="Invalid token format")
-
-        # Update the user in the database, marking them as verified
         query = users.update().where(users.c.token == token).values(verified=True)
         await database.execute(query)
-        return {"message": "User successfully verified"}
+        return RedirectResponse(url="http://pegaso.us/verificado.html")
+        #return {"message": "User successfully verified"}
     except HTTPException as e:
-        # Re-raise the HTTPException if it's already an HTTPException
         raise e
     except Exception as e:
-        # Handle other exceptions and return an internal server error
         raise HTTPException(status_code=500, detail=f"Error verifying user: {str(e)}")
 
 
