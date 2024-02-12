@@ -57,6 +57,7 @@ database = Database(DATABASE_URL, min_size=1, max_size=20)
 
 origins = [
     "http://pegaso.us",
+    "https://pegaso.us",
 ]
 
 app.add_middleware(
