@@ -1,6 +1,6 @@
 # posts.py
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Depends, Path, Query
-from sqlalchemy import Table, select, MetaData, Integer, String, Column
+from sqlalchemy import Table, select, MetaData, Integer, String, Column, DateTime, func
 from databases import Database
 from dotenv import load_dotenv
 import os
@@ -41,6 +41,8 @@ posts = Table(
     Column("current_price", Integer),
     Column("top_price", Integer),
     Column("creator_id", Integer, index=True),
+    Column("created_at", DateTime),
+    Column("expire_date", DateTime),
 )
 
 router = APIRouter()
@@ -106,11 +108,19 @@ async def create_post(
 
 @router.get("/list", response_model=List[dict])
 async def list_posts(skip: int = 0, limit: int = 10):
-    query = select(posts).offset(skip).limit(limit)
-    posts_list = await database.fetch_all(query)
-    if not posts_list:
-        return {"message": "No hay subastas activas en este momento."}
-    return [dict(post) for post in posts_list]
+    try:
+        total_query = select(func.count()).select_from(posts)
+        total_posts = await database.fetch_val(total_query)
+        
+        if total_posts is None or total_posts == 0:
+            return [{"message": "No hay subastas activas en este momento."}]
+        else:
+            query = select(posts).offset(skip).limit(limit)
+            posts_list = await database.fetch_all(query)
+            return [dict(post) for post in posts_list]
+    except Exception as e:
+        print(f"Error: {e}")
+        return {"message": "An error occurred while fetching posts."}
 
 @router.get("/details/{post_id}", response_model=dict)
 async def get_post_details(post_id: int = Path(..., title="The ID of the post to retrieve")):

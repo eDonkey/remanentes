@@ -46,6 +46,7 @@ def sendtemplate(to, name, token, mailtemplate):
     try:
         sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         sendgrid_client.send(message)
+        print("email sent")
     except Exception as e:
         print(e)
 
