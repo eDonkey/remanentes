@@ -10,7 +10,7 @@ cffi==1.16.0
 charset-normalizer==3.3.2
 click==8.1.7
 crypto==1.4.1
-cryptography==42.0.0
+cryptography==42.0.3
 databases==0.8.0
 dnspython==2.5.0
 ecdsa==0.18.0
